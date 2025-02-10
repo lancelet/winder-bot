@@ -1,6 +1,10 @@
 use crate::Direction;
 
-/// Stepper represents a stepper motor, which can take steps.
+/// Stepper is the abstraction of a stepper motor.
+///
+/// This kind of stepper never fails to take a step (at least in principle).
+/// For a stepper that can fail to take a step when it hits overflow limits,
+/// see [crate::PositionedStepper].
 pub trait Stepper {
     /// Takes a single step in the supplied direction.
     ///
@@ -10,6 +14,9 @@ pub trait Stepper {
 }
 
 /// Stepper to use for testing purposes.
+///
+/// This is just a position counter. It uses `i128`, since that is likely to
+/// be a very much larger range than the step range of any real-world stepper.
 #[cfg(test)]
 pub struct TestStepper {
     position: i128,
@@ -49,5 +56,37 @@ impl TestStepper {
 impl Stepper for TestStepper {
     fn step(&mut self, direction: Direction) {
         self.do_step(direction);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::direction::test::direction;
+    use super::*;
+    use proptest::prelude::*;
+
+    proptest! {
+        #[test]
+        fn test_step(pos in i32::MIN..i32::MAX, dir in direction()) {
+            let mut stepper = TestStepper::new(pos as i128);
+            let expected = match dir {
+                Direction::Positive => pos as i128 + 1,
+                Direction::Negative => pos as i128 - 1
+            };
+
+            assert_eq!(pos as i128, stepper.get_position());
+            stepper.do_step(dir);
+            assert_eq!(expected, stepper.get_position());
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn test_set_position(pos in i32::MIN..i32::MAX) {
+            let mut stepper = TestStepper::new(0);
+            assert_eq!(0, stepper.get_position());
+            stepper.set_position(pos as i128);
+            assert_eq!(pos as i128, stepper.get_position());
+        }
     }
 }

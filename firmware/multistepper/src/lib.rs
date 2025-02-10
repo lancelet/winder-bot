@@ -3,6 +3,7 @@
 mod kinematics;
 
 pub use kinematics::Direction;
+pub use kinematics::PositionedStepper;
 pub use kinematics::Stepper;
 pub use kinematics::Steps;
 
