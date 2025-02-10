@@ -14,7 +14,7 @@ pub struct Machine {
 impl Machine {
     /// Number of steps to use as an "electronic addition" to the limit
     /// switches along X.
-    const X_EDGE_SAFETY_STEPS: u32 = 6400;
+    const X_EDGE_SAFETY_STEPS: u32 = 3200;
     /// mm per revolution for x-axis lead screw.
     const X_MM_PER_REV: u32 = 5;
     /// Steps per revolution for x-axis.
@@ -50,45 +50,76 @@ impl Machine {
     }
 
     /// Perform a move.
-    pub fn move_millis(&mut self, dx: i32, da: i32) {
+    pub fn move_millis(&mut self, x_microns: i32, a_millidegrees: i32) {
         match self.move_mode {
-            MoveMode::Relative => self.move_rel_millis(dx, da),
-            MoveMode::Absolute => todo!(),
+            MoveMode::Relative => {
+                self.move_rel_millis(x_microns, a_millidegrees)
+            }
+            MoveMode::Absolute => {
+                self.move_abs_millis(x_microns, a_millidegrees)
+            }
         }
+    }
+
+    /// Move an absolute number of microns and milli-degrees along both X and
+    /// A at the same time.
+    fn move_abs_millis(&mut self, x_microns: i32, a_millidegrees: i32) {
+        let mut x_target = self.x_microns_to_steps(x_microns);
+        let a_target = self.a_millidegrees_to_steps(a_millidegrees);
+
+        if x_target < 0 {
+            x_target = 0;
+        }
+        if x_target > self.x_limit as i32 {
+            x_target = self.x_limit as i32;
+        }
+
+        let dx = x_target - self.x_pos as i32;
+        let da = a_target - self.a_pos as i32;
+
+        self.move_rel_steps(dx, da);
     }
 
     /// Move a relative number of microns and milli-degrees along both X and
     /// A at the same time.
-    fn move_rel_millis(&mut self, dx: i32, da: i32) {
-        let dx_steps = (dx.abs() as u32 * Self::X_STEPS_PER_REV
-            / Self::X_MM_PER_REV
-            / 1000) as i32
-            * dx.signum();
-        let da_steps = (da.abs() as u32 * Self::A_STEPS_PER_REV / 360 / 1000)
-            as i32
-            * da.signum();
-
+    fn move_rel_millis(&mut self, dx_microns: i32, da_millidegrees: i32) {
+        let dx_steps = self.x_microns_to_steps(dx_microns);
+        let da_steps = self.a_millidegrees_to_steps(da_millidegrees);
         self.move_rel_steps(dx_steps, da_steps);
     }
 
     /// Move a relative number of steps along both X and A at the same time.
     fn move_rel_steps(&mut self, dx: i32, da: i32) {
-        let x_dir = if dx >= 0 { XDir::Right } else { XDir::Left };
+        if dx == 0 {
+            self.move_rel_a_only(da);
+        } else {
+            let x_dir = if dx >= 0 { XDir::Right } else { XDir::Left };
+            let a_dir = if da >= 0 { ADir::Pos } else { ADir::Neg };
+
+            // For Bresenham:
+            // - x is x
+            // - a is y
+            let mut d = 2 * da - dx;
+            for _ in 0..dx.abs() {
+                self.step_x(x_dir);
+                delay_us(self.move_delay_us);
+                if d > 0 {
+                    self.step_a(a_dir);
+                    delay_us(self.move_delay_us);
+                    d -= 2 * dx;
+                }
+                d += 2 * da;
+            }
+        }
+    }
+
+    /// Move a relative number of steps along A only.
+    fn move_rel_a_only(&mut self, da: i32) {
         let a_dir = if da >= 0 { ADir::Pos } else { ADir::Neg };
 
-        // For Bresenham:
-        // - x is x
-        // - a is y
-        let mut d = 2 * da - dx;
-        for _ in 0..dx.abs() {
-            self.step_x(x_dir);
+        for _ in 0..da.abs() {
+            self.step_a(a_dir);
             delay_us(self.move_delay_us);
-            if d > 0 {
-                self.step_a(a_dir);
-                delay_us(self.move_delay_us);
-                d -= 2 * dx;
-            }
-            d += 2 * da;
         }
     }
 
@@ -143,6 +174,18 @@ impl Machine {
                 }
             }
         }
+    }
+
+    fn x_microns_to_steps(&self, x_microns: i32) -> i32 {
+        let dx = x_microns.abs() as u32;
+        let dsteps = dx * Self::X_STEPS_PER_REV / Self::X_MM_PER_REV / 1000;
+        (dsteps as i32) * x_microns.signum()
+    }
+
+    fn a_millidegrees_to_steps(&self, a_millidegrees: i32) -> i32 {
+        let da = a_millidegrees.abs() as u32;
+        let dsteps = da * Self::A_STEPS_PER_REV / 360 / 1000;
+        (dsteps as i32) * a_millidegrees.signum()
     }
 }
 

@@ -5,8 +5,13 @@ authors = ["Jonathan Merritt <j.s.merritt@gmail.com>"]
 edition = "2021"
 license = "MIT OR Apache-2.0"
 
+[lib]
+name = "winderbot_lib"
+path = "src/lib.rs"
+
 [[bin]]
-name = "winderbot-firmware"
+name = "winderbot_firmware"
+path = "src/main.rs"
 test = false
 bench = false
 
