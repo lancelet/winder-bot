@@ -174,4 +174,68 @@ mod test {
             }
         }
     }
+
+    /// Test actions we can take on a positioned stepper.
+    #[derive(Debug, Clone)]
+    enum Action {
+        StepPlus,
+        StepMinus,
+        Zero,
+        SetPosition(Steps),
+    }
+
+    /// Generation strategy for actions.
+    fn action() -> impl Strategy<Value = Action> {
+        use Action::*;
+        prop_oneof![
+            Just(StepPlus),
+            Just(StepMinus),
+            Just(Zero),
+            any::<i32>().prop_map(|x| SetPosition(Steps::new(x)))
+        ]
+    }
+
+    proptest! {
+        #[test]
+        fn test_actions(actions in collection::vec(action(), 1..64)) {
+            let stepper = TestStepper::new(0);
+            let mut pstepper = PositionedStepper::new(stepper);
+
+            let mut ppos: i32 = 0;
+            let mut upos: i128 = 0;
+            for a in actions {
+
+                // Perform the action to update the test state.
+                use Action::*;
+                match a {
+                    StepPlus => {
+                        ppos += 1;
+                        upos += 1;
+                    },
+                    StepMinus => {
+                        ppos -= 1;
+                        upos -= 1;
+                    },
+                    Zero => {
+                        ppos = 0;
+                    },
+                    SetPosition(p) => {
+                        ppos = p.get_value()
+                    }
+                }
+
+                // Perform the action on the positioned stepper.
+                match a {
+                    StepPlus => { pstepper.step(Direction::Positive); },
+                    StepMinus => { pstepper.step(Direction::Negative); },
+                    Zero => { pstepper.set_gauge_zero(); },
+                    SetPosition(p) => { pstepper.set_gauge_position(p); },
+                }
+
+                // Check that the stepper and test state currently match.
+                assert_eq!(ppos, pstepper.get_position().get_value());
+                assert_eq!(upos, pstepper.stepper.get_position());
+            }
+        }
+    }
 }
