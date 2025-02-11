@@ -145,6 +145,9 @@ impl<S: Stepper, L: LimitSwitch> LimitedStepper<S, L> {
         self.zeroing_engage_positive::<D>(move_delay_us)?;
         self.zeroing_backoff_positive::<D>(move_delay_us, soft_safety_margin)?;
         let max_steps = self.stepper.get_position();
+        if min_steps >= max_steps {
+            return None;
+        }
         self.soft_range = Some(StepRange::new(min_steps, max_steps));
         self.zeroing_center::<D>(move_delay_us)?;
 
@@ -399,6 +402,7 @@ mod test {
         delay::test::NoDelay, limit_switch::test::TestLimitSwitch,
         stepper::tests::TestStepper,
     };
+    use proptest::prelude::*;
 
     #[test]
     fn test_steprange_ok_to_move() {
@@ -462,6 +466,17 @@ mod test {
                 negative_limit,
                 positive_limit,
             }
+        }
+
+        /// Returns a new [LimitedStepper] from the test components.
+        pub fn limited_stepper(
+            &self,
+        ) -> LimitedStepper<TestStepper, TestStepperLimitSwitch> {
+            LimitedStepper::new(
+                PositionedStepper::new(self.stepper()),
+                self.positive_limit_switch(),
+                self.negative_limit_switch(),
+            )
         }
 
         /// Returns the test stepper.
@@ -545,11 +560,7 @@ mod test {
             Steps::new(0),
             Steps::new(100),
         );
-        let mut lstepper = LimitedStepper::new(
-            PositionedStepper::new(ts.stepper()),
-            ts.positive_limit_switch(),
-            ts.negative_limit_switch(),
-        );
+        let mut lstepper = ts.limited_stepper();
 
         // Run zeroing.
         let result = lstepper.run_zeroing::<NoDelay>(50, Steps::new(10));
@@ -560,5 +571,52 @@ mod test {
         assert_eq!(50, lstepper.get_position().get_value());
         assert_eq!(50, ts.stepper().get_position());
         assert_eq!(Some(Steps::new(50)), result);
+    }
+
+    proptest! {
+       #[test]
+        fn test_zeroing(
+            negative_limit in -32..32i32,
+            (limit_range, position) in (1..64i32)
+              .prop_flat_map(|range| (Just(range), 0..range)),
+            soft_safety_margin in 0..32i32,
+        ) {
+            // Establish whether zeroing should succeed.
+            let should_succeed = 2 * soft_safety_margin < limit_range;
+
+            // Create the test stepper.
+            let position = Steps::new(position);
+            let positive_limit = Steps::new(negative_limit + limit_range);
+            let negative_limit = Steps::new(negative_limit);
+            let ts = TestStepperWithLimitSwitches::new(
+                position, negative_limit, positive_limit
+            );
+            let mut lstepper = ts.limited_stepper();
+
+            let soft_safety_margin = Steps::new(soft_safety_margin);
+
+            // Try zeroing.
+            let result = lstepper.run_zeroing::<NoDelay>(50, soft_safety_margin);
+
+            // Check outcome.
+            if should_succeed {
+                assert!(result.is_some());
+                let soft_range = lstepper.soft_range.unwrap();
+                let expected_soft_min = soft_safety_margin.get_value();
+                let expected_soft_max =
+                    limit_range - soft_safety_margin.get_value();
+                let expected_steps = limit_range / 2;
+                assert_eq!(expected_soft_min, soft_range.min_steps.get_value());
+                assert_eq!(expected_soft_max, soft_range.max_steps.get_value());
+                assert_eq!(
+                    limit_range - 2 * soft_safety_margin.get_value(),
+                    soft_range.max_steps.get_value() -
+                    soft_range.min_steps.get_value()
+                );
+                assert_eq!(expected_steps, result.unwrap().get_value());
+            } else {
+                assert!(result.is_none());
+            }
+        }
     }
 }
