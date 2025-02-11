@@ -13,57 +13,63 @@ pub trait Stepper {
     fn step(&mut self, direction: Direction);
 }
 
-/// Stepper to use for testing purposes.
-///
-/// This is just a position counter. It uses `i128`, since that is likely to
-/// be a very much larger range than the step range of any real-world stepper.
 #[cfg(test)]
-pub struct TestStepper {
-    position: i128,
-}
-#[cfg(test)]
-impl TestStepper {
-    /// Creates a new test stepper.
-    pub fn new(position: i128) -> Self {
-        Self { position }
-    }
-
-    /// Returns the position of a test stepper.
-    pub fn get_position(&self) -> i128 {
-        self.position
-    }
-
-    /// Sets the position of a test stepper.
-    pub fn set_position(&mut self, position: i128) {
-        self.position = position
-    }
-
-    /// Executes a step for the test stepper.
-    fn do_step(&mut self, direction: Direction) {
-        self.position = match direction {
-            Direction::Negative => self
-                .position
-                .checked_sub_unsigned(1)
-                .expect("TestStepper overflowed (+) its position!"),
-            Direction::Positive => self
-                .position
-                .checked_add_unsigned(1)
-                .expect("TestStepper overflowed (-) its position!"),
-        }
-    }
-}
-#[cfg(test)]
-impl Stepper for TestStepper {
-    fn step(&mut self, direction: Direction) {
-        self.do_step(direction);
-    }
-}
-
-#[cfg(test)]
-mod tests {
+pub mod tests {
     use super::super::direction::test::direction;
     use super::*;
     use proptest::prelude::*;
+    use std::sync::{Arc, Mutex};
+
+    /// Stepper to use for testing purposes.
+    ///
+    /// This is just a position counter. It uses `i128`, since that is likely
+    /// to be a very much larger range than the step range of any real-world
+    /// stepper.
+    ///
+    /// If the `TestStepper` is cloned then the underlying step count is
+    /// shared. This can be useful for coupling simulated devices (eg. limit
+    /// switches) to the stepper.
+    #[derive(Clone)]
+    pub struct TestStepper {
+        position: Arc<Mutex<i128>>,
+    }
+    impl TestStepper {
+        /// Creates a new test stepper.
+        pub fn new(position: i128) -> Self {
+            Self {
+                position: Arc::new(Mutex::new(position)),
+            }
+        }
+
+        /// Returns the position of a test stepper.
+        pub fn get_position(&self) -> i128 {
+            *self.position.lock().unwrap()
+        }
+
+        /// Sets the position of a test stepper.
+        pub fn set_position(&mut self, position: i128) {
+            *self.position.lock().unwrap() = position;
+        }
+
+        /// Executes a step for the test stepper.
+        fn do_step(&mut self, direction: Direction) {
+            let mut pos = self.position.lock().unwrap();
+
+            *pos = match direction {
+                Direction::Negative => pos
+                    .checked_sub_unsigned(1)
+                    .expect("TestStepper overflowed (+) its position!"),
+                Direction::Positive => pos
+                    .checked_add_unsigned(1)
+                    .expect("TestStepper overflowed (-) its position!"),
+            };
+        }
+    }
+    impl Stepper for TestStepper {
+        fn step(&mut self, direction: Direction) {
+            self.do_step(direction);
+        }
+    }
 
     proptest! {
         #[test]

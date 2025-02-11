@@ -23,31 +23,33 @@ pub enum LimitSwitchState {
 }
 
 #[cfg(test)]
-pub struct TestLimitSwitch {
-    state: LimitSwitchState,
-}
-#[cfg(test)]
-impl TestLimitSwitch {
-    /// Creates a new test limit switch.
-    pub fn new(state: LimitSwitchState) -> Self {
-        Self { state }
-    }
-
-    /// Sets the state of the test limit switch.
-    pub fn set_limitswitch_state(&mut self, state: LimitSwitchState) {
-        self.state = state;
-    }
-}
-#[cfg(test)]
-impl LimitSwitch for TestLimitSwitch {
-    fn read_limitswitch_state(&self) -> LimitSwitchState {
-        self.state
-    }
-}
-
-#[cfg(test)]
-mod test {
+pub mod test {
     use super::*;
+    use std::sync::{Arc, Mutex};
+
+    /// Limit switch that can have its state set for testing.
+    #[derive(Clone)]
+    pub struct TestLimitSwitch {
+        state: Arc<Mutex<LimitSwitchState>>,
+    }
+    impl TestLimitSwitch {
+        /// Creates a new test limit switch.
+        pub fn new(state: LimitSwitchState) -> Self {
+            Self {
+                state: Arc::new(Mutex::new(state)),
+            }
+        }
+
+        /// Sets the state of the test limit switch.
+        pub fn set_limitswitch_state(&mut self, state: LimitSwitchState) {
+            *self.state.lock().unwrap() = state;
+        }
+    }
+    impl LimitSwitch for TestLimitSwitch {
+        fn read_limitswitch_state(&self) -> LimitSwitchState {
+            self.state.lock().unwrap().clone()
+        }
+    }
 
     #[test]
     fn test_test_limit_switch() {

@@ -85,7 +85,7 @@ impl<S: Stepper> PositionedStepper<S> {
 mod test {
     use super::super::direction::test::direction;
     use super::*;
-    use crate::TestStepper;
+    use crate::kinematics::stepper::tests::TestStepper;
     use proptest::collection;
     use proptest::prelude::*;
 

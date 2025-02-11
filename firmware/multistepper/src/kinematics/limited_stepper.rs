@@ -84,6 +84,21 @@ impl<S: Stepper, L: LimitSwitch> LimitedStepper<S, L> {
         self.stepper.step(direction)
     }
 
+    /// Returns the current position of the stepper.
+    fn get_position(&self) -> Steps {
+        self.stepper.get_position()
+    }
+
+    /// Returns the state of the negative-end limit switch.
+    fn negative_limit_state(&self) -> LimitSwitchState {
+        self.limit_switches.negative_end.read_limitswitch_state()
+    }
+
+    /// Returns the state of the positive-end limit switch.
+    fn positive_limit_state(&self) -> LimitSwitchState {
+        self.limit_switches.positive_end.read_limitswitch_state()
+    }
+
     /// Runs a zeroing procedure.
     ///
     /// Zeroing does the following:
@@ -110,60 +125,31 @@ impl<S: Stepper, L: LimitSwitch> LimitedStepper<S, L> {
     ///
     /// # Returns
     ///
-    /// - `true` if the procedure completed successfully.
-    /// - `false` if it failed.
+    /// - `None`: if the zeroing failed.
+    /// - `Some(steps)`: if the zeroing succeeded, where `steps` is the
+    ///   current position.
     pub fn run_zeroing<D: Delay>(
         &mut self,
         move_delay_us: u32,
         soft_safety_margin: Steps,
-    ) -> bool {
-        // Disengage the negative limit switch if it is engaged.
-        if !self.zeroing_disengage_negative::<D>(move_delay_us) {
-            return false;
-        }
+    ) -> Option<Steps> {
+        // We cannot have negative safety margin steps.
+        debug_assert!(soft_safety_margin >= Steps::zero());
 
-        // Engage the negative limit switch.
-        if !self.zeroing_engage_negative::<D>(move_delay_us) {
-            return false;
-        }
-
-        // Zero the underling stepper.
+        // Run all the side-effects for zeroing.
+        self.zeroing_disengage_negative::<D>(move_delay_us)?;
+        self.zeroing_engage_negative::<D>(move_delay_us)?;
         self.stepper.set_gauge_zero();
-
-        // Back off the negatie limit switch by `soft_safety_margin`.
-        if !self
-            .zeroing_backoff_negative::<D>(move_delay_us, soft_safety_margin)
-        {
-            return false;
-        }
-
-        // Record the minimum soft-limit.
+        self.zeroing_backoff_negative::<D>(move_delay_us, soft_safety_margin)?;
         let min_steps = self.stepper.get_position();
-
-        // Engage the positive limit switch.
-        if !self.zeroing_engage_positive::<D>(move_delay_us) {
-            return false;
-        }
-
-        // Back off the positive limit switch by `soft_safety_margin`.
-        if !self
-            .zeroing_backoff_positive::<D>(move_delay_us, soft_safety_margin)
-        {
-            return false;
-        }
-
-        // Record the maximum soft-limit.
+        self.zeroing_engage_positive::<D>(move_delay_us)?;
+        self.zeroing_backoff_positive::<D>(move_delay_us, soft_safety_margin)?;
         let max_steps = self.stepper.get_position();
-
-        // Store both soft limits.
         self.soft_range = Some(StepRange::new(min_steps, max_steps));
+        self.zeroing_center::<D>(move_delay_us)?;
 
-        // Center the axis.
-        if !self.zeroing_center::<D>(move_delay_us) {
-            return false;
-        }
-
-        true
+        // Return the position.
+        Some(self.get_position())
     }
 
     /// Start of zeroing: disengage the negative limit switch.
@@ -174,32 +160,27 @@ impl<S: Stepper, L: LimitSwitch> LimitedStepper<S, L> {
     fn zeroing_disengage_negative<D: Delay>(
         &mut self,
         move_delay_us: u32,
-    ) -> bool {
-        while self.limit_switches.negative_end.read_limitswitch_state()
-            == LimitSwitchState::AtLimit
-        {
-            if self.step(Direction::Positive) == None {
-                return false;
-            }
+    ) -> Option<()> {
+        use LimitSwitchState::AtLimit;
+        while self.negative_limit_state() == AtLimit {
+            self.step(Direction::Positive)?;
             D::delay_us(move_delay_us);
         }
-        true
+        Some(())
     }
 
     /// Engage the negative limit switch.
     fn zeroing_engage_negative<D: Delay>(
         &mut self,
         move_delay_us: u32,
-    ) -> bool {
-        while self.limit_switches.negative_end.read_limitswitch_state()
-            == LimitSwitchState::NotAtLimit
-        {
-            if self.step(Direction::Negative) == None {
-                return false;
-            }
+    ) -> Option<()> {
+        use LimitSwitchState::NotAtLimit;
+        while self.negative_limit_state() == NotAtLimit {
+            self.step(Direction::Negative)?;
             D::delay_us(move_delay_us);
         }
-        true
+        self.step(Direction::Positive)?;
+        Some(())
     }
 
     /// Back-off the negative limit switch by the specified safety margin.
@@ -207,32 +188,28 @@ impl<S: Stepper, L: LimitSwitch> LimitedStepper<S, L> {
         &mut self,
         move_delay_us: u32,
         soft_safety_margin: Steps,
-    ) -> bool {
+    ) -> Option<()> {
         let mut step_count = Steps::zero();
         while step_count < soft_safety_margin {
-            if self.step(Direction::Positive) == None {
-                return false;
-            }
+            self.step(Direction::Positive)?;
             D::delay_us(move_delay_us);
             step_count = step_count.inc().unwrap();
         }
-        true
+        Some(())
     }
 
     /// Engage the positive limit switch.
     fn zeroing_engage_positive<D: Delay>(
         &mut self,
         move_delay_us: u32,
-    ) -> bool {
-        while self.limit_switches.positive_end.read_limitswitch_state()
-            == LimitSwitchState::NotAtLimit
-        {
-            if self.step(Direction::Positive) == None {
-                return false;
-            }
+    ) -> Option<()> {
+        use LimitSwitchState::NotAtLimit;
+        while self.positive_limit_state() == NotAtLimit {
+            self.step(Direction::Positive)?;
             D::delay_us(move_delay_us);
         }
-        true
+        self.step(Direction::Negative)?;
+        Some(())
     }
 
     /// Back-off the positive limit switch by the specified safety margin.
@@ -240,43 +217,30 @@ impl<S: Stepper, L: LimitSwitch> LimitedStepper<S, L> {
         &mut self,
         move_delay_us: u32,
         soft_safety_margin: Steps,
-    ) -> bool {
+    ) -> Option<()> {
         let mut step_count = Steps::zero();
         while step_count < soft_safety_margin {
-            if self.step(Direction::Negative) == None {
-                return false;
-            }
+            self.step(Direction::Negative)?;
             D::delay_us(move_delay_us);
             step_count = step_count.inc().unwrap();
         }
-        true
+        Some(())
     }
 
     /// After zeroing; move to the center of the soft range.
-    fn zeroing_center<D: Delay>(&mut self, move_delay_us: u32) -> bool {
-        if let Some(range) = self.soft_range.as_ref() {
-            let target = Steps::new(
-                range.max_steps.get_value() / 2
-                    + range.min_steps.get_value() / 2,
-            );
-            if self.stepper.get_position() > target {
-                return false;
-            } else {
-                while target < self.stepper.get_position() {
-                    if self.step(Direction::Negative) == None {
-                        return false;
-                    }
-                    D::delay_us(move_delay_us);
-                }
-                return true;
-            }
-        } else {
-            return false;
+    fn zeroing_center<D: Delay>(&mut self, move_delay_us: u32) -> Option<()> {
+        let range = self.soft_range?;
+        let target = range.half();
+        while target < self.get_position() {
+            self.step(Direction::Negative)?;
+            D::delay_us(move_delay_us);
         }
+        Some(())
     }
 }
 
 /// Represents the allowed (soft-limited) step range.
+#[derive(Copy, Clone)]
 struct StepRange {
     /// Minimum allowed step value (inclusive).
     min_steps: Steps,
@@ -291,6 +255,15 @@ impl StepRange {
             min_steps,
             max_steps,
         }
+    }
+
+    /// Returns the point half-way along the range from `min_steps` to
+    /// `max_steps`.
+    fn half(&self) -> Steps {
+        let s_min = self.min_steps.get_value();
+        let s_max = self.max_steps.get_value();
+        let s_half = s_min + (s_max - s_min) / 2;
+        Steps::new(s_half)
     }
 
     /// Checks if we're OK to move in a given direction.
@@ -422,7 +395,10 @@ impl<L: LimitSwitch> LimitSwitches<L> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::TestLimitSwitch;
+    use crate::kinematics::{
+        delay::test::NoDelay, limit_switch::test::TestLimitSwitch,
+        stepper::tests::TestStepper,
+    };
 
     #[test]
     fn test_steprange_ok_to_move() {
@@ -438,30 +414,151 @@ mod test {
 
     #[test]
     fn test_limitswitches_ok_to_move() {
-        let ps = TestLimitSwitch::new(LimitSwitchState::NotAtLimit);
-        let ns = TestLimitSwitch::new(LimitSwitchState::NotAtLimit);
-        let mut ss = LimitSwitches::new(ps, ns);
+        let mut ps = TestLimitSwitch::new(LimitSwitchState::NotAtLimit);
+        let mut ns = TestLimitSwitch::new(LimitSwitchState::NotAtLimit);
+        let ss = LimitSwitches::new(ps.clone(), ns.clone());
 
         assert!(ss.ok_to_move(Direction::Positive));
         assert!(ss.ok_to_move(Direction::Negative));
 
-        ss.positive_end
-            .set_limitswitch_state(LimitSwitchState::AtLimit);
+        ps.set_limitswitch_state(LimitSwitchState::AtLimit);
         assert!(!ss.ok_to_move(Direction::Positive));
         assert!(ss.ok_to_move(Direction::Negative));
 
-        ss.positive_end
-            .set_limitswitch_state(LimitSwitchState::NotAtLimit);
-        ss.negative_end
-            .set_limitswitch_state(LimitSwitchState::AtLimit);
+        ps.set_limitswitch_state(LimitSwitchState::NotAtLimit);
+        ns.set_limitswitch_state(LimitSwitchState::AtLimit);
         assert!(ss.ok_to_move(Direction::Positive));
         assert!(!ss.ok_to_move(Direction::Negative));
 
-        ss.positive_end
-            .set_limitswitch_state(LimitSwitchState::AtLimit);
-        ss.negative_end
-            .set_limitswitch_state(LimitSwitchState::AtLimit);
+        ps.set_limitswitch_state(LimitSwitchState::AtLimit);
+        ns.set_limitswitch_state(LimitSwitchState::AtLimit);
         assert!(!ss.ok_to_move(Direction::Positive));
         assert!(!ss.ok_to_move(Direction::Negative));
+    }
+
+    /// Provides a test stepper with coupled simulated limit switches.
+    pub struct TestStepperWithLimitSwitches {
+        test_stepper: TestStepper,
+        negative_limit: Steps,
+        positive_limit: Steps,
+    }
+    impl TestStepperWithLimitSwitches {
+        /// Creates a new test stepper.
+        ///
+        /// # Parameters
+        ///
+        /// - `position`: Starting position.
+        /// - `negative_limit`: Limit of the negative limit switch.
+        /// - `positive_limit`: Limit of the positive limit switch.
+        pub fn new(
+            position: Steps,
+            negative_limit: Steps,
+            positive_limit: Steps,
+        ) -> Self {
+            assert!(negative_limit <= positive_limit);
+            let test_stepper = TestStepper::new(position.get_value() as i128);
+            Self {
+                test_stepper,
+                negative_limit,
+                positive_limit,
+            }
+        }
+
+        /// Returns the test stepper.
+        ///
+        /// This clones the test stepper, so that the stepper returned here
+        /// shares its steps with the stepper we still own.
+        pub fn stepper(&self) -> TestStepper {
+            self.test_stepper.clone()
+        }
+
+        /// Returns the negative limit switch.
+        ///
+        /// The state of this limit switch is coupled to the test stepper.
+        pub fn negative_limit_switch(&self) -> TestStepperLimitSwitch {
+            TestStepperLimitSwitch::new(
+                Direction::Negative,
+                self.negative_limit,
+                self.test_stepper.clone(),
+            )
+        }
+
+        /// Returns the positive limit switch.
+        ///
+        /// The state of this limit switch is coupled to the test stepper.
+        pub fn positive_limit_switch(&self) -> TestStepperLimitSwitch {
+            TestStepperLimitSwitch::new(
+                Direction::Positive,
+                self.positive_limit,
+                self.test_stepper.clone(),
+            )
+        }
+    }
+
+    /// Limit switch for the test stepper.
+    pub struct TestStepperLimitSwitch {
+        direction: Direction,
+        limit: Steps,
+        stepper: TestStepper,
+    }
+    impl TestStepperLimitSwitch {
+        fn new(
+            direction: Direction,
+            limit: Steps,
+            stepper: TestStepper,
+        ) -> Self {
+            Self {
+                direction,
+                limit,
+                stepper,
+            }
+        }
+    }
+    impl LimitSwitch for TestStepperLimitSwitch {
+        fn read_limitswitch_state(&self) -> LimitSwitchState {
+            use LimitSwitchState::*;
+            let pos = Steps::new(self.stepper.get_position() as i32);
+            match self.direction {
+                Direction::Negative => {
+                    if pos < self.limit {
+                        AtLimit
+                    } else {
+                        NotAtLimit
+                    }
+                }
+                Direction::Positive => {
+                    if pos > self.limit {
+                        AtLimit
+                    } else {
+                        NotAtLimit
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_run_zeroing_happy_path_example() {
+        // Set up the limited stepper.
+        let ts = TestStepperWithLimitSwitches::new(
+            Steps::new(30),
+            Steps::new(0),
+            Steps::new(100),
+        );
+        let mut lstepper = LimitedStepper::new(
+            PositionedStepper::new(ts.stepper()),
+            ts.positive_limit_switch(),
+            ts.negative_limit_switch(),
+        );
+
+        // Run zeroing.
+        let result = lstepper.run_zeroing::<NoDelay>(50, Steps::new(10));
+
+        // Check outcome.
+        assert_eq!(10, lstepper.soft_range.unwrap().min_steps.get_value());
+        assert_eq!(90, lstepper.soft_range.unwrap().max_steps.get_value());
+        assert_eq!(50, lstepper.get_position().get_value());
+        assert_eq!(50, ts.stepper().get_position());
+        assert_eq!(Some(Steps::new(50)), result);
     }
 }

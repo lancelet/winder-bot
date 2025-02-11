@@ -14,8 +14,3 @@ pub use limited_stepper::LimitedStepper;
 pub use positioned_stepper::PositionedStepper;
 pub use stepper::Stepper;
 pub use steps::Steps;
-
-#[cfg(test)]
-pub use limit_switch::TestLimitSwitch;
-#[cfg(test)]
-pub use stepper::TestStepper;
