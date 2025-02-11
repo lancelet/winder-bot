@@ -5,7 +5,7 @@ type StepRepr = i32;
 ///
 /// `Steps` is careful to prevent overflows, so that it can be used safely to
 /// track axis positions.
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Clone, Copy, PartialOrd)]
 pub struct Steps(StepRepr);
 impl Steps {
     /// Create a new number of steps.
