@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+winnow = { version = "0.7.2", default-features = false }
 
 [dev-dependencies]
 proptest = "1.6.0"

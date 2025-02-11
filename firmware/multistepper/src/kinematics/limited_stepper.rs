@@ -25,7 +25,7 @@ impl<S: Stepper, L: LimitSwitch> LimitedStepper<S, L> {
     ///
     /// # Parameters
     ///
-    /// - `stepper`: Underlying `PositionedStepper` to use for position.
+    /// - `stepper`: Underlying [PositionedStepper] to use for position.
     /// - `limit_switch_pos`: Limit switch at the end of the axis when moving
     ///   in a positive direction.
     /// - `limit_switch_neg`: Limit switch at the end of the axis when moving
