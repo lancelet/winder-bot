@@ -12,13 +12,14 @@ use crate::Steps;
 /// # Type Parameters
 ///
 /// - `S`: type of the [PositionedStepper].
-/// - `L`: type of the [LimitSwitch].
-pub struct LimitedStepper<S, L> {
+/// - `LP`: type of the positive end [LimitSwitch].
+/// - `LN`: type of the negative end [LimitSwitch].
+pub struct LimitedStepper<S, LP, LN> {
     stepper: PositionedStepper<S>,
-    limit_switches: LimitSwitches<L>,
+    limit_switches: LimitSwitches<LP, LN>,
     soft_range: Option<StepRange>,
 }
-impl<S: Stepper, L: LimitSwitch> LimitedStepper<S, L> {
+impl<S: Stepper, LP: LimitSwitch, LN: LimitSwitch> LimitedStepper<S, LP, LN> {
     /// Creates a new `LimitedStepper`.
     ///
     /// Initially there is no soft range for the `LimitedStepper`. Usually,
@@ -33,8 +34,8 @@ impl<S: Stepper, L: LimitSwitch> LimitedStepper<S, L> {
     ///   in a negative direction.
     pub fn new(
         stepper: PositionedStepper<S>,
-        limit_switch_pos: L,
-        limit_switch_neg: L,
+        limit_switch_pos: LP,
+        limit_switch_neg: LN,
     ) -> Self {
         let limit_switches =
             LimitSwitches::new(limit_switch_pos, limit_switch_neg);
@@ -345,11 +346,11 @@ impl StepRange {
 }
 
 /// Container for limit switches.
-struct LimitSwitches<L> {
-    positive_end: L,
-    negative_end: L,
+struct LimitSwitches<LP, LN> {
+    positive_end: LP,
+    negative_end: LN,
 }
-impl<L: LimitSwitch> LimitSwitches<L> {
+impl<LP: LimitSwitch, LN: LimitSwitch> LimitSwitches<LP, LN> {
     /// Creates a new pair of limit switches.
     ///
     /// # Parameters
@@ -358,7 +359,7 @@ impl<L: LimitSwitch> LimitSwitches<L> {
     ///   the axis if we keep moving in the positive direction.
     /// - `negative_end`: Limit switch which should be engaged at the end of
     ///   the axis if we keep moving in the negative direction.
-    fn new(positive_end: L, negative_end: L) -> Self {
+    fn new(positive_end: LP, negative_end: LN) -> Self {
         Self {
             positive_end,
             negative_end,
@@ -475,7 +476,11 @@ mod test {
         /// Returns a new [LimitedStepper] from the test components.
         pub fn limited_stepper(
             &self,
-        ) -> LimitedStepper<TestStepper, TestStepperLimitSwitch> {
+        ) -> LimitedStepper<
+            TestStepper,
+            TestStepperLimitSwitch,
+            TestStepperLimitSwitch,
+        > {
             LimitedStepper::new(
                 PositionedStepper::new(self.stepper()),
                 self.positive_limit_switch(),
