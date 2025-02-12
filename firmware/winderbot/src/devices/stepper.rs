@@ -1,8 +1,6 @@
-use arduino_hal::{
-    delay_us,
-    port::{mode::Output, Pin, PinOps},
-};
-use multistepper::Direction;
+use crate::devices;
+use arduino_hal::port::{mode::Output, Pin, PinOps};
+use multistepper::{Delay, Direction, MicroSeconds};
 
 /// Stepper motor.
 ///
@@ -18,9 +16,9 @@ pub struct Stepper<P, D> {
     /// Stores the current direction.
     direction: Direction,
     /// Delay between pulses, in microseconds.
-    delay_pulse_us: u32,
+    delay_pulse: MicroSeconds,
     /// Delay between direction changes, in microseconds.
-    delay_direction_us: u32,
+    delay_direction: MicroSeconds,
 }
 
 impl<P: PinOps, D: PinOps> Stepper<P, D> {
@@ -30,22 +28,22 @@ impl<P: PinOps, D: PinOps> Stepper<P, D> {
     ///
     /// - `pin_pulse`: Pin to use for pulse signals.
     /// - `pin_direction`: Pin to use for direction signals.
-    /// - `delay_pulse_us`: Delay between pulses, in microseconds.
-    /// - `delay_direction_us`: Delay between direction changes, in
+    /// - `delay_pulse`: Delay between pulses, in microseconds.
+    /// - `delay_direction`: Delay between direction changes, in
     ///   microseconds.
     pub fn new(
         pin_pulse: Pin<Output, P>,
         pin_direction: Pin<Output, D>,
-        delay_pulse_us: u32,
-        delay_direction_us: u32,
+        delay_pulse: MicroSeconds,
+        delay_direction: MicroSeconds,
     ) -> Self {
         let direction = Direction::Negative;
         let mut stepper = Self {
             pin_pulse,
             pin_direction,
             direction,
-            delay_pulse_us,
-            delay_direction_us,
+            delay_pulse,
+            delay_direction,
         };
 
         // Ensure that the direction we think we have is really what's set on
@@ -63,9 +61,9 @@ impl<P: PinOps, D: PinOps> Stepper<P, D> {
     fn do_step(&mut self, direction: Direction) {
         self.set_direction(direction);
         self.pin_pulse.set_high();
-        delay_us(self.delay_pulse_us);
+        devices::Delay::delay_us(self.delay_pulse);
         self.pin_pulse.set_low();
-        delay_us(self.delay_pulse_us);
+        devices::Delay::delay_us(self.delay_pulse);
     }
 
     /// Set the direction, but only if it needs changing.
@@ -88,13 +86,13 @@ impl<P: PinOps, D: PinOps> Stepper<P, D> {
     ///
     /// - `direction`: Desired direction of motion.
     fn force_set_direction(&mut self, direction: Direction) {
-        delay_us(self.delay_direction_us);
+        devices::Delay::delay_us(self.delay_direction);
         match direction {
             Direction::Negative => self.pin_direction.set_low(),
             Direction::Positive => self.pin_direction.set_high(),
         }
         self.direction = direction;
-        delay_us(self.delay_direction_us);
+        devices::Delay::delay_us(self.delay_direction);
     }
 }
 
