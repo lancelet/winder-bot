@@ -1,7 +1,7 @@
 /// Underlying type representing the number of steps.
 type StepRepr = i32;
 
-/// Represents a number of steps.
+/// Number of steps.
 ///
 /// `Steps` is careful to prevent overflows, so that it can be used safely to
 /// track axis positions.

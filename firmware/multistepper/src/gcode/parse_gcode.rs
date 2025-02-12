@@ -8,7 +8,7 @@ use super::parse_numbers::{
     parse_degrees_as_millidegrees, parse_digits_u8, parse_mm_as_microns,
 };
 
-/// Basic representation of GCode atoms.
+/// GCode atoms.
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub enum GCode {
     Linear(Linear),
@@ -17,29 +17,29 @@ pub enum GCode {
     M(M),
 }
 
-/// Specifies a linear axis amount.
+/// Linear axis move amount.
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub struct Linear {
     axis: LinAxis,
     amount: Microns,
 }
 
-/// Specifies a rotary axis amount.
+/// Rotary axis move amount.
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub struct Rotary {
     axis: RotAxis,
     amount: MilliDegrees,
 }
 
-/// A "G" command.
+/// G command.
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub struct G(u8);
 
-/// An "M" command.
+/// M command.
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub struct M(u8);
 
-/// Identifies a linear axis.
+/// Linear axis.
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub enum LinAxis {
     X,
@@ -47,7 +47,7 @@ pub enum LinAxis {
     Z,
 }
 
-/// Identifies a rotary axis.
+/// Rotary axis.
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub enum RotAxis {
     A,

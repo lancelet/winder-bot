@@ -3,7 +3,7 @@ use core::ops::{Add, Sub};
 /// Underlying type representing the number of microns.
 type MicronsRepr = i32;
 
-/// Represents a distance in microns.
+/// Distance in microns.
 #[derive(Debug, PartialEq, PartialOrd, Eq, Ord, Copy, Clone)]
 pub struct Microns(MicronsRepr);
 impl Microns {
@@ -12,7 +12,7 @@ impl Microns {
         Self(value)
     }
 
-    /// Returns the value as a [MicronsRepr].
+    /// Returns the value as an `i32`.
     pub fn get_value(&self) -> MicronsRepr {
         self.0
     }

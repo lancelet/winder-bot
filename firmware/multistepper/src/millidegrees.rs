@@ -3,7 +3,7 @@ use core::ops::{Add, Sub};
 /// Underlying type representing the number of microns.
 type MilliDegreesRepr = i32;
 
-/// Represents a distance in microns.
+/// Angle in millidegrees.
 #[derive(Debug, PartialEq, PartialOrd, Eq, Ord, Copy, Clone)]
 pub struct MilliDegrees(MilliDegreesRepr);
 impl MilliDegrees {
@@ -12,7 +12,7 @@ impl MilliDegrees {
         Self(value)
     }
 
-    /// Returns the value as a [MilliDegreesRepr].
+    /// Returns the value as an `i32`.
     pub fn get_value(&self) -> MilliDegreesRepr {
         self.0
     }
