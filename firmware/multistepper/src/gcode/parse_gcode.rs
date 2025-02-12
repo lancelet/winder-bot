@@ -1,0 +1,3 @@
+enum GCode {
+    LinearAxis(Microns),
+}

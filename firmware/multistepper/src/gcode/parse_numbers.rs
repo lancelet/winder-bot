@@ -1,4 +1,4 @@
-use crate::Microns;
+use crate::{Microns, MilliDegrees};
 use winnow::ascii::digit1;
 use winnow::combinator::{alt, opt};
 use winnow::token::literal;
@@ -15,6 +15,28 @@ use winnow::{Parser, Result};
 /// - `"+123.45"`
 /// - `"-123.0"`
 pub fn parse_mm_as_microns<'s>(input: &mut &'s str) -> Result<Microns> {
+    parse_millis_as_micros(input).map(Microns::new)
+}
+
+/// Parses a decimal value in degrees as a value in millidegrees.
+///
+/// This permits only decimal notation, NOT scientific notation. A maximum of
+/// 3 decimal places is allowed following the decimal point.
+///
+/// Examples of valid input:
+///
+/// - `"123.456"`
+/// - `"+123.45"`
+/// - `"-123.0"`
+pub fn parse_degrees_as_millidegrees<'s>(
+    input: &mut &'s str,
+) -> Result<MilliDegrees> {
+    parse_millis_as_micros(input).map(MilliDegrees::new)
+}
+
+/// Parse a decimal value with up to three digits as a value in units 1/1000
+/// the size.
+fn parse_millis_as_micros<'s>(input: &mut &'s str) -> Result<i32> {
     let sign = {
         match opt(parse_sign).parse_next(input)? {
             None => 1,
@@ -29,8 +51,7 @@ pub fn parse_mm_as_microns<'s>(input: &mut &'s str) -> Result<Microns> {
         }
     };
 
-    let value: i32 = sign * (int_part * 1000 + frac_part);
-    Ok(Microns::new(value))
+    Ok(sign * (int_part * 1000 + frac_part))
 }
 
 /// Represents a sign when parsing numbers.
@@ -90,7 +111,10 @@ fn parse_period<'s>(input: &mut &'s str) -> Result<()> {
 
 #[cfg(test)]
 mod test {
-    use crate::microns::test::microns_to_mm_string;
+    use crate::{
+        microns::test::microns_to_mm_string,
+        millidegrees::test::millidegrees_to_degrees_string,
+    };
 
     use super::*;
     use proptest::prelude::*;
@@ -157,14 +181,13 @@ mod test {
 
     proptest! {
         #[test]
-        fn test_parse_mm_as_microns(
+        fn test_parse_milli_as_micro(
             sign in prop_oneof![Just(Sign::Plus), Just(Sign::Minus)].boxed(),
             include_sign: bool,
             int_part in (0..999),
             frac_part in (0..999)
         ) {
             let number = sign.to_i32() * (int_part * 1000 + frac_part);
-            let expected = Microns::new(number);
 
             let frac_str =
                 if frac_part == 0 {
@@ -184,7 +207,7 @@ mod test {
             let input = format!("{}{}{}", sign_str, int_part, frac_str);
             let mut input_ref: &str = &input;
 
-            assert_eq!(Ok(expected), parse_mm_as_microns(&mut input_ref));
+            assert_eq!(Ok(number), parse_millis_as_micros(&mut input_ref));
         }
     }
 
@@ -197,6 +220,18 @@ mod test {
             let microns_str = microns_to_mm_string(&microns);
             let mut input_ref: &str = &microns_str;
             assert_eq!(Ok(microns), parse_mm_as_microns(&mut input_ref));
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn millidegrees_round_trip(
+            millidegrees_number: i32
+        ) {
+            let mdg = MilliDegrees::new(millidegrees_number);
+            let mdg_str = millidegrees_to_degrees_string(&mdg);
+            let mut input_ref: &str = &mdg_str;
+            assert_eq!(Ok(mdg), parse_degrees_as_millidegrees(&mut input_ref));
         }
     }
 }
