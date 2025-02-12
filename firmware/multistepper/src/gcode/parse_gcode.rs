@@ -178,7 +178,118 @@ fn parse_rotaxis<'s>(input: &mut &'s str) -> Result<RotAxis> {
 
 #[cfg(test)]
 mod test {
+    use crate::microns::test::microns;
+    use crate::millidegrees::test::millidegrees;
+
     use super::*;
+    use core::fmt::Display;
+    use core::fmt::Formatter;
+    use core::fmt::Result;
+    use core::fmt::Write;
+    use proptest::collection;
+    use proptest::prelude::*;
+
+    impl Display for GCode {
+        fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+            use GCode::*;
+            match self {
+                Linear(linear) => linear.fmt(f),
+                Rotary(rotary) => rotary.fmt(f),
+                G(g) => g.fmt(f),
+                M(m) => m.fmt(f),
+            }
+        }
+    }
+
+    impl Display for Linear {
+        fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+            write!(f, "{}{}", self.axis, self.amount)
+        }
+    }
+
+    impl Display for Rotary {
+        fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+            write!(f, "{}{}", self.axis, self.amount)
+        }
+    }
+
+    impl Display for G {
+        fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+            write!(f, "G{}", self.0)
+        }
+    }
+
+    impl Display for M {
+        fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+            write!(f, "M{}", self.0)
+        }
+    }
+
+    impl Display for LinAxis {
+        fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+            use LinAxis::*;
+            match self {
+                X => f.write_char('X'),
+                Y => f.write_char('Y'),
+                Z => f.write_char('Z'),
+            }
+        }
+    }
+
+    impl Display for RotAxis {
+        fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+            use RotAxis::*;
+            match self {
+                A => f.write_char('A'),
+                B => f.write_char('B'),
+                C => f.write_char('C'),
+            }
+        }
+    }
+
+    /// Strategy for generating [GCode].
+    pub fn gcode() -> impl Strategy<Value = GCode> {
+        prop_oneof![
+            linear().prop_map(GCode::Linear),
+            rotary().prop_map(GCode::Rotary),
+            g().prop_map(GCode::G),
+            m().prop_map(GCode::M)
+        ]
+    }
+
+    /// Strategy for generating [Linear].
+    pub fn linear() -> impl Strategy<Value = Linear> {
+        (lin_axis(), microns())
+            .prop_map(|(axis, amount)| Linear { axis, amount })
+    }
+
+    /// Strategy for generating [Rotary].
+    pub fn rotary() -> impl Strategy<Value = Rotary> {
+        (rot_axis(), millidegrees())
+            .prop_map(|(axis, amount)| Rotary { axis, amount })
+    }
+
+    /// Strategy for generating [G].
+    pub fn g() -> impl Strategy<Value = G> {
+        any::<u8>().prop_map(G)
+    }
+
+    /// Strategy for generating [M].
+    pub fn m() -> impl Strategy<Value = M> {
+        any::<u8>().prop_map(M)
+    }
+
+    /// Strategy for generating [RotAxis].
+    pub fn lin_axis() -> impl Strategy<Value = LinAxis> {
+        use LinAxis::*;
+        prop_oneof![Just(X), Just(Y), Just(Z)]
+    }
+
+    /// Strategy for generating [RotAxis].
+    pub fn rot_axis() -> impl Strategy<Value = RotAxis> {
+        use RotAxis::*;
+        prop_oneof![Just(A), Just(B), Just(C)]
+    }
 
     #[test]
     fn test_parse_gcode_examples() {
@@ -258,5 +369,28 @@ mod test {
         assert!(result.is_err());
         assert_eq!(&input_ref2[3..], input_ref);
         assert_eq!(expected, buffer);
+    }
+
+    proptest! {
+        #[test]
+        fn gcode_roundtrip(
+            gcodes in collection::vec(gcode(), 1..64)
+        ) {
+            let input: String = gcodes
+                .iter()
+                .map(|gcode| format!("{}", gcode))
+                .collect::<Vec<String>>()
+                .join(" ");
+
+            let expected: heapless::Vec<GCode, 64> =
+                heapless::Vec::from_slice(&gcodes).unwrap();
+            let mut buffer: heapless::Vec<GCode, 64> = heapless::Vec::new();
+
+            let mut input_ref: &str = &input;
+            let result = parse_gcodes(&mut input_ref, &mut buffer);
+            assert_eq!(Ok(true), result);
+            assert!(input_ref.is_empty());
+            assert_eq!(expected, buffer);
+        }
     }
 }

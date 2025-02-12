@@ -37,6 +37,23 @@ impl Sub for Microns {
 #[cfg(test)]
 pub mod test {
     use super::*;
+    use core::fmt::Display;
+    use core::fmt::Formatter;
+    use core::fmt::Result;
+    use proptest::prelude::*;
+
+    impl Display for Microns {
+        fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+            f.write_str(&microns_to_mm_string(self))
+        }
+    }
+
+    /// Strategy for generating [Microns].
+    ///
+    /// This generates `Microns` across the entire `i32` range.
+    pub fn microns() -> impl Strategy<Value = Microns> {
+        any::<i32>().prop_map(Microns::new)
+    }
 
     /// Converts a [Microns] value to a decimal String in mm.
     pub fn microns_to_mm_string(microns: &Microns) -> String {

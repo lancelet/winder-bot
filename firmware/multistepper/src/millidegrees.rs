@@ -37,6 +37,23 @@ impl Sub for MilliDegrees {
 #[cfg(test)]
 pub mod test {
     use super::*;
+    use core::fmt::Display;
+    use core::fmt::Formatter;
+    use core::fmt::Result;
+    use proptest::prelude::*;
+
+    impl Display for MilliDegrees {
+        fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+            f.write_str(&millidegrees_to_degrees_string(self))
+        }
+    }
+
+    /// Strategy for generating [MilliDegrees].
+    ///
+    /// This generates `MilliDegrees` across the entire `i32` range.
+    pub fn millidegrees() -> impl Strategy<Value = MilliDegrees> {
+        any::<i32>().prop_map(MilliDegrees::new)
+    }
 
     /// Converts a [MilliDegrees] value to a decimal String in degrees.
     pub fn millidegrees_to_degrees_string(mdg: &MilliDegrees) -> String {
