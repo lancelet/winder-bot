@@ -3,6 +3,7 @@
 pub mod gcode;
 mod kinematics;
 mod microns;
+mod microseconds;
 mod millidegrees;
 
 pub use kinematics::Delay;
@@ -15,4 +16,5 @@ pub use kinematics::Stepper;
 pub use kinematics::Steps;
 
 pub use microns::Microns;
+pub use microseconds::MicroSeconds;
 pub use millidegrees::MilliDegrees;

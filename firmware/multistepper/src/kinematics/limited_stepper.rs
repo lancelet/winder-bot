@@ -2,6 +2,7 @@ use crate::Delay;
 use crate::Direction;
 use crate::LimitSwitch;
 use crate::LimitSwitchState;
+use crate::MicroSeconds;
 use crate::PositionedStepper;
 use crate::Stepper;
 use crate::Steps;
@@ -118,7 +119,7 @@ impl<S: Stepper, L: LimitSwitch> LimitedStepper<S, L> {
     ///
     /// # Parameters
     ///
-    /// - `move_delay_us`: An amount to delay in microseconds between each
+    /// - `move_delay`: An amount to delay in microseconds between each
     ///   stepper move. This controls the speed of zeroing.
     /// - `soft_safety_margin`: A number of steps before the limit switches
     ///   engaged to set the soft limits.
@@ -130,26 +131,26 @@ impl<S: Stepper, L: LimitSwitch> LimitedStepper<S, L> {
     ///   current position.
     pub fn run_zeroing<D: Delay>(
         &mut self,
-        move_delay_us: u32,
+        move_delay: MicroSeconds,
         soft_safety_margin: Steps,
     ) -> Option<Steps> {
         // We cannot have negative safety margin steps.
         debug_assert!(soft_safety_margin >= Steps::zero());
 
         // Run all the side-effects for zeroing.
-        self.zeroing_disengage_negative::<D>(move_delay_us)?;
-        self.zeroing_engage_negative::<D>(move_delay_us)?;
+        self.zeroing_disengage_negative::<D>(move_delay)?;
+        self.zeroing_engage_negative::<D>(move_delay)?;
         self.stepper.set_gauge_zero();
-        self.zeroing_backoff_negative::<D>(move_delay_us, soft_safety_margin)?;
+        self.zeroing_backoff_negative::<D>(move_delay, soft_safety_margin)?;
         let min_steps = self.stepper.get_position();
-        self.zeroing_engage_positive::<D>(move_delay_us)?;
-        self.zeroing_backoff_positive::<D>(move_delay_us, soft_safety_margin)?;
+        self.zeroing_engage_positive::<D>(move_delay)?;
+        self.zeroing_backoff_positive::<D>(move_delay, soft_safety_margin)?;
         let max_steps = self.stepper.get_position();
         if min_steps >= max_steps {
             return None;
         }
         self.soft_range = Some(StepRange::new(min_steps, max_steps));
-        self.zeroing_center::<D>(move_delay_us)?;
+        self.zeroing_center::<D>(move_delay)?;
 
         // Return the position.
         Some(self.get_position())
@@ -162,12 +163,12 @@ impl<S: Stepper, L: LimitSwitch> LimitedStepper<S, L> {
     /// positive limit switch engages at any time during this procedure, fail.
     fn zeroing_disengage_negative<D: Delay>(
         &mut self,
-        move_delay_us: u32,
+        move_delay: MicroSeconds,
     ) -> Option<()> {
         use LimitSwitchState::AtLimit;
         while self.negative_limit_state() == AtLimit {
             self.step(Direction::Positive)?;
-            D::delay_us(move_delay_us);
+            D::delay_us(move_delay);
         }
         Some(())
     }
@@ -175,12 +176,12 @@ impl<S: Stepper, L: LimitSwitch> LimitedStepper<S, L> {
     /// Engage the negative limit switch.
     fn zeroing_engage_negative<D: Delay>(
         &mut self,
-        move_delay_us: u32,
+        move_delay: MicroSeconds,
     ) -> Option<()> {
         use LimitSwitchState::NotAtLimit;
         while self.negative_limit_state() == NotAtLimit {
             self.step(Direction::Negative)?;
-            D::delay_us(move_delay_us);
+            D::delay_us(move_delay);
         }
         self.step(Direction::Positive)?;
         Some(())
@@ -189,13 +190,13 @@ impl<S: Stepper, L: LimitSwitch> LimitedStepper<S, L> {
     /// Back-off the negative limit switch by the specified safety margin.
     fn zeroing_backoff_negative<D: Delay>(
         &mut self,
-        move_delay_us: u32,
+        move_delay: MicroSeconds,
         soft_safety_margin: Steps,
     ) -> Option<()> {
         let mut step_count = Steps::zero();
         while step_count < soft_safety_margin {
             self.step(Direction::Positive)?;
-            D::delay_us(move_delay_us);
+            D::delay_us(move_delay);
             step_count = step_count.inc().unwrap();
         }
         Some(())
@@ -204,12 +205,12 @@ impl<S: Stepper, L: LimitSwitch> LimitedStepper<S, L> {
     /// Engage the positive limit switch.
     fn zeroing_engage_positive<D: Delay>(
         &mut self,
-        move_delay_us: u32,
+        move_delay: MicroSeconds,
     ) -> Option<()> {
         use LimitSwitchState::NotAtLimit;
         while self.positive_limit_state() == NotAtLimit {
             self.step(Direction::Positive)?;
-            D::delay_us(move_delay_us);
+            D::delay_us(move_delay);
         }
         self.step(Direction::Negative)?;
         Some(())
@@ -218,25 +219,28 @@ impl<S: Stepper, L: LimitSwitch> LimitedStepper<S, L> {
     /// Back-off the positive limit switch by the specified safety margin.
     fn zeroing_backoff_positive<D: Delay>(
         &mut self,
-        move_delay_us: u32,
+        move_delay: MicroSeconds,
         soft_safety_margin: Steps,
     ) -> Option<()> {
         let mut step_count = Steps::zero();
         while step_count < soft_safety_margin {
             self.step(Direction::Negative)?;
-            D::delay_us(move_delay_us);
+            D::delay_us(move_delay);
             step_count = step_count.inc().unwrap();
         }
         Some(())
     }
 
     /// After zeroing; move to the center of the soft range.
-    fn zeroing_center<D: Delay>(&mut self, move_delay_us: u32) -> Option<()> {
+    fn zeroing_center<D: Delay>(
+        &mut self,
+        move_delay: MicroSeconds,
+    ) -> Option<()> {
         let range = self.soft_range?;
         let target = range.half();
         while target < self.get_position() {
             self.step(Direction::Negative)?;
-            D::delay_us(move_delay_us);
+            D::delay_us(move_delay);
         }
         Some(())
     }
@@ -563,7 +567,8 @@ mod test {
         let mut lstepper = ts.limited_stepper();
 
         // Run zeroing.
-        let result = lstepper.run_zeroing::<NoDelay>(50, Steps::new(10));
+        let result = lstepper
+            .run_zeroing::<NoDelay>(MicroSeconds::new(50), Steps::new(10));
 
         // Check outcome.
         assert_eq!(10, lstepper.soft_range.unwrap().min_steps.get_value());
@@ -596,7 +601,10 @@ mod test {
             let soft_safety_margin = Steps::new(soft_safety_margin);
 
             // Try zeroing.
-            let result = lstepper.run_zeroing::<NoDelay>(50, soft_safety_margin);
+            let result = lstepper.run_zeroing::<NoDelay>(
+                MicroSeconds::new(50),
+                soft_safety_margin
+            );
 
             // Check outcome.
             if should_succeed {
