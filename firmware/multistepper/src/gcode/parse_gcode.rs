@@ -11,9 +11,13 @@ use super::parse_numbers::{
 /// GCode atoms.
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub enum GCode {
+    /// Linear axis position, like `X42.3`.
     Linear(Linear),
+    /// Rotary axis position, like `A180`.
     Rotary(Rotary),
+    /// G command, like `G0`.
     G(G),
+    /// M command, like `M100`.
     M(M),
 }
 
