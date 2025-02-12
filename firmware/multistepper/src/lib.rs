@@ -1,6 +1,6 @@
 #![cfg_attr(not(test), no_std)]
 
-mod gcode;
+pub mod gcode;
 mod kinematics;
 mod microns;
 mod millidegrees;

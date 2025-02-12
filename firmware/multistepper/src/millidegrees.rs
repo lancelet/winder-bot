@@ -4,7 +4,7 @@ use core::ops::{Add, Sub};
 type MilliDegreesRepr = i32;
 
 /// Represents a distance in microns.
-#[derive(Debug, PartialEq, PartialOrd, Eq, Ord)]
+#[derive(Debug, PartialEq, PartialOrd, Eq, Ord, Copy, Clone)]
 pub struct MilliDegrees(MilliDegreesRepr);
 impl MilliDegrees {
     /// Creates a new `Microns`.

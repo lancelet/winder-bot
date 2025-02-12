@@ -84,6 +84,11 @@ fn parse_digits_i32<'s>(input: &mut &'s str) -> Result<i32> {
     digit1.try_map(str::parse).parse_next(input)
 }
 
+/// Parse digits (0-9) as a u8.
+pub fn parse_digits_u8<'s>(input: &mut &'s str) -> Result<u8> {
+    digit1.try_map(str::parse).parse_next(input)
+}
+
 /// Parse digits (0-9) as "fractional digits".
 ///
 /// This means that the digits will be padded with zeros up to `N` width.
