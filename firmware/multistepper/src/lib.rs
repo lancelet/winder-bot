@@ -12,6 +12,7 @@ pub use kinematics::Direction;
 pub use kinematics::LimitSwitch;
 pub use kinematics::LimitSwitchState;
 pub use kinematics::LimitedStepper;
+pub use kinematics::LinearConverter;
 pub use kinematics::PositionedStepper;
 pub use kinematics::Stepper;
 pub use kinematics::Steps;
