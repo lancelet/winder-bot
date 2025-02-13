@@ -3,8 +3,7 @@ use crate::{
         command::Command, command_parser, command_parser::CommandParser,
     },
     devices::{
-        delay::Delay, limitswitch::LimitSwitch, read_uart, read_uart::ReadUart,
-        stepper::Stepper,
+        delay::Delay, limitswitch::LimitSwitch, read_uart, stepper::Stepper,
     },
 };
 use arduino_hal::{
@@ -25,8 +24,8 @@ use ufmt::uwriteln;
 pub struct Machine {
     x_axis: LimitedStepper<Stepper<D8, D9>, LimitSwitch<D13>, LimitSwitch<D12>>,
     a_axis: PositionedStepper<Stepper<D10, D11>>,
-    read_uart: ReadUart<80>,
     serial: Usart<USART0, Pin<Input, PD0>, Pin<Output, PD1>>,
+    uart_input_buffer: heapless::String<80>,
     command_parser: CommandParser<8>,
 }
 
@@ -70,7 +69,7 @@ impl Machine {
         let a_axis = PositionedStepper::new(a_stepper);
 
         // UART
-        let read_uart = ReadUart::new();
+        let uart_input_buffer = heapless::String::new();
 
         // Command parser and GCode buffer.
         let command_parser = CommandParser::new();
@@ -78,8 +77,8 @@ impl Machine {
         Self {
             x_axis,
             a_axis,
-            read_uart,
             serial,
+            uart_input_buffer,
             command_parser,
         }
     }
@@ -97,13 +96,16 @@ impl Machine {
     /// Block waiting for the next valid command.
     fn block_for_next_command(&mut self) -> Command {
         loop {
-            match self.read_uart.readln() {
+            match read_uart::readln(
+                &mut self.serial,
+                &mut self.uart_input_buffer,
+            ) {
                 Err(read_uart::Error::BufferOverflow) => {
                     uwriteln!(&mut self.serial, "ERROR: UART buffer overflow.")
                         .unwrap_infallible()
                 }
                 Ok(()) => {
-                    match self.command_parser.parse(self.read_uart.as_ref()) {
+                    match self.command_parser.parse(&self.uart_input_buffer) {
                         Err(command_parser::Error::BufferOverflow) => {
                             uwriteln!(
                                 &mut self.serial,
@@ -114,7 +116,7 @@ impl Machine {
                         Err(command_parser::Error::ParseError) => uwriteln!(
                             &mut self.serial,
                             "ERROR: Could not parse input: \"{}\".",
-                            self.read_uart.as_ref()
+                            &self.uart_input_buffer as &str
                         )
                         .unwrap_infallible(),
                         Ok(cmd) => return cmd,
