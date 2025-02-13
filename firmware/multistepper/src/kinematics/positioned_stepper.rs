@@ -1,3 +1,4 @@
+use crate::CheckedStepper;
 use crate::Direction;
 use crate::Stepper;
 use crate::Steps;
@@ -64,7 +65,7 @@ impl<S: Stepper> PositionedStepper<S> {
     /// - `Some(steps)`: if the step could successfully be taken. This returns
     ///   the new position of the stepper.
     /// - `None`: if no step could be taken without overflowing limits.
-    pub fn step(&mut self, direction: Direction) -> Option<Steps> {
+    pub fn do_try_step(&mut self, direction: Direction) -> Option<Steps> {
         // Compute the new position if possible.
         let next_position_option = match direction {
             Direction::Negative => self.position.dec(),
@@ -78,6 +79,12 @@ impl<S: Stepper> PositionedStepper<S> {
         }
 
         next_position_option
+    }
+}
+
+impl<S: Stepper> CheckedStepper for PositionedStepper<S> {
+    fn try_step(&mut self, direction: Direction) -> Option<Steps> {
+        self.do_try_step(direction)
     }
 }
 
@@ -113,7 +120,7 @@ mod test {
 
         // Take some steps
         for _ in 0..10 {
-            pstepper.step(Direction::Positive);
+            pstepper.do_try_step(Direction::Positive);
         }
 
         // Check current status.
@@ -136,13 +143,13 @@ mod test {
         assert_eq!(0, pstepper.get_position().get_value());
 
         // Take a plus step.
-        let steps_plus = pstepper.step(Direction::Positive);
+        let steps_plus = pstepper.do_try_step(Direction::Positive);
         assert_eq!(Some(Steps::new(1)), steps_plus);
         assert_eq!(1, pstepper.get_position().get_value());
         assert_eq!(1, pstepper.stepper.get_position());
 
         // Take a minus step.
-        let steps_minus = pstepper.step(Direction::Negative);
+        let steps_minus = pstepper.do_try_step(Direction::Negative);
         assert_eq!(Some(Steps::new(0)), steps_minus);
         assert_eq!(0, pstepper.get_position().get_value());
         assert_eq!(0, pstepper.stepper.get_position());
@@ -165,7 +172,7 @@ mod test {
                 }
 
                 // Take the step
-                let step_result = pstepper.step(dir);
+                let step_result = pstepper.do_try_step(dir);
 
                 // Check that we end up at the correct position
                 assert_eq!(Some(Steps::new(pos)), step_result);
@@ -226,8 +233,8 @@ mod test {
 
                 // Perform the action on the positioned stepper.
                 match a {
-                    StepPlus => { pstepper.step(Direction::Positive); },
-                    StepMinus => { pstepper.step(Direction::Negative); },
+                    StepPlus => { pstepper.do_try_step(Direction::Positive); },
+                    StepMinus => { pstepper.do_try_step(Direction::Negative); },
                     Zero => { pstepper.set_gauge_zero(); },
                     SetPosition(p) => { pstepper.set_gauge_position(p); },
                 }

@@ -6,6 +6,7 @@ mod microns;
 mod microseconds;
 mod millidegrees;
 
+pub use kinematics::CheckedStepper;
 pub use kinematics::Delay;
 pub use kinematics::Direction;
 pub use kinematics::LimitSwitch;

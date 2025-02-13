@@ -1,6 +1,7 @@
 use crate::Direction;
+use crate::Steps;
 
-/// Stepper is the abstraction of a stepper motor.
+/// Stepper motor.
 ///
 /// This kind of stepper never fails to take a step (at least in principle).
 /// For a stepper that can fail to take a step when it hits overflow limits,
@@ -9,8 +10,21 @@ pub trait Stepper {
     /// Takes a single step in the supplied direction.
     ///
     /// # Parameters
+    ///
     /// - `direction`: Direction in which to take the step.
     fn step(&mut self, direction: Direction);
+}
+
+/// Checked stepper motor.
+///
+/// A checked stepper motor has a range, or limit switches.
+pub trait CheckedStepper {
+    /// Try to take a step.
+    ///
+    /// # Parameters
+    ///
+    /// - `direction`: Direction in which to take the step.
+    fn try_step(&mut self, direction: Direction) -> Option<Steps>;
 }
 
 #[cfg(test)]

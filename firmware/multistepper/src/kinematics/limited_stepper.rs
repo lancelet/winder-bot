@@ -1,3 +1,4 @@
+use crate::CheckedStepper;
 use crate::Delay;
 use crate::Direction;
 use crate::LimitSwitch;
@@ -48,6 +49,31 @@ impl<S: Stepper, LP: LimitSwitch, LN: LimitSwitch> LimitedStepper<S, LP, LN> {
         }
     }
 
+    /// Creates a new `LimitedStepper`.
+    ///
+    /// Initially there is no soft range for the `LimitedStepper`. Usually,
+    /// establishing the soft range requires procedural zeroing.
+    ///
+    /// # Parameters
+    ///
+    /// - `stepper`: Underlying [Stepper] to use. This will be wrapped as a
+    ///   [PositionedStepper].
+    /// - `limit_switch_pos`: Limit switch at the end of the axis when moving
+    ///   in a positive direction.
+    /// - `limit_switch_neg`: Limit switch at the end of the axis when moving
+    ///   in a negative direction.
+    pub fn from_stepper(
+        stepper: S,
+        limit_switch_pos: LP,
+        limit_switch_neg: LN,
+    ) -> Self {
+        Self::new(
+            PositionedStepper::new(stepper),
+            limit_switch_pos,
+            limit_switch_neg,
+        )
+    }
+
     /// Takes a step.
     ///
     /// A step is taken provided the following criteria are met:
@@ -66,7 +92,7 @@ impl<S: Stepper, LP: LimitSwitch, LN: LimitSwitch> LimitedStepper<S, LP, LN> {
     /// - `Some(steps)`: if the step could successfully be taken. This returns
     ///   the new position of the stepper.
     /// - `None`: if no step could be taken without overflowing limits.
-    pub fn step(&mut self, direction: Direction) -> Option<Steps> {
+    pub fn do_try_step(&mut self, direction: Direction) -> Option<Steps> {
         // Bail if the limit switches do not allow us to move in the specified
         // direction.
         if !self.limit_switches.ok_to_move(direction) {
@@ -83,7 +109,7 @@ impl<S: Stepper, LP: LimitSwitch, LN: LimitSwitch> LimitedStepper<S, LP, LN> {
 
         // Both the limit switches and soft range allow the move; try to move
         // the underlying stepper.
-        self.stepper.step(direction)
+        self.stepper.do_try_step(direction)
     }
 
     /// Returns the current position of the stepper.
@@ -138,6 +164,9 @@ impl<S: Stepper, LP: LimitSwitch, LN: LimitSwitch> LimitedStepper<S, LP, LN> {
         // We cannot have negative safety margin steps.
         debug_assert!(soft_safety_margin >= Steps::zero());
 
+        // Clear any existing soft range.
+        self.soft_range = None;
+
         // Run all the side-effects for zeroing.
         self.zeroing_disengage_negative::<D>(move_delay)?;
         self.zeroing_engage_negative::<D>(move_delay)?;
@@ -168,7 +197,7 @@ impl<S: Stepper, LP: LimitSwitch, LN: LimitSwitch> LimitedStepper<S, LP, LN> {
     ) -> Option<()> {
         use LimitSwitchState::AtLimit;
         while self.negative_limit_state() == AtLimit {
-            self.step(Direction::Positive)?;
+            self.do_try_step(Direction::Positive)?;
             D::delay_us(move_delay);
         }
         Some(())
@@ -181,10 +210,10 @@ impl<S: Stepper, LP: LimitSwitch, LN: LimitSwitch> LimitedStepper<S, LP, LN> {
     ) -> Option<()> {
         use LimitSwitchState::NotAtLimit;
         while self.negative_limit_state() == NotAtLimit {
-            self.step(Direction::Negative)?;
+            self.do_try_step(Direction::Negative)?;
             D::delay_us(move_delay);
         }
-        self.step(Direction::Positive)?;
+        self.do_try_step(Direction::Positive)?;
         Some(())
     }
 
@@ -196,7 +225,7 @@ impl<S: Stepper, LP: LimitSwitch, LN: LimitSwitch> LimitedStepper<S, LP, LN> {
     ) -> Option<()> {
         let mut step_count = Steps::zero();
         while step_count < soft_safety_margin {
-            self.step(Direction::Positive)?;
+            self.do_try_step(Direction::Positive)?;
             D::delay_us(move_delay);
             step_count = step_count.inc().unwrap();
         }
@@ -210,10 +239,10 @@ impl<S: Stepper, LP: LimitSwitch, LN: LimitSwitch> LimitedStepper<S, LP, LN> {
     ) -> Option<()> {
         use LimitSwitchState::NotAtLimit;
         while self.positive_limit_state() == NotAtLimit {
-            self.step(Direction::Positive)?;
+            self.do_try_step(Direction::Positive)?;
             D::delay_us(move_delay);
         }
-        self.step(Direction::Negative)?;
+        self.do_try_step(Direction::Negative)?;
         Some(())
     }
 
@@ -225,7 +254,7 @@ impl<S: Stepper, LP: LimitSwitch, LN: LimitSwitch> LimitedStepper<S, LP, LN> {
     ) -> Option<()> {
         let mut step_count = Steps::zero();
         while step_count < soft_safety_margin {
-            self.step(Direction::Negative)?;
+            self.do_try_step(Direction::Negative)?;
             D::delay_us(move_delay);
             step_count = step_count.inc().unwrap();
         }
@@ -240,10 +269,18 @@ impl<S: Stepper, LP: LimitSwitch, LN: LimitSwitch> LimitedStepper<S, LP, LN> {
         let range = self.soft_range?;
         let target = range.half();
         while target < self.get_position() {
-            self.step(Direction::Negative)?;
+            self.do_try_step(Direction::Negative)?;
             D::delay_us(move_delay);
         }
         Some(())
+    }
+}
+
+impl<S: Stepper, LP: LimitSwitch, LN: LimitSwitch> CheckedStepper
+    for LimitedStepper<S, LP, LN>
+{
+    fn try_step(&mut self, direction: Direction) -> Option<Steps> {
+        self.do_try_step(direction)
     }
 }
 

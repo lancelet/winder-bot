@@ -20,6 +20,12 @@ pub enum GCode {
     /// M command, like `M100`.
     M(M),
 }
+impl GCode {
+    /// Creates a `Gxxx` GCode.
+    pub fn g(value: u8) -> GCode {
+        GCode::G(G(value))
+    }
+}
 
 /// Linear axis move amount.
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -57,6 +63,14 @@ pub enum RotAxis {
     A,
     B,
     C,
+}
+
+/// Allow GCode to be a token in winnow.
+impl winnow::stream::ContainsToken<GCode> for GCode {
+    #[inline(always)]
+    fn contains_token(&self, token: GCode) -> bool {
+        *self == token
+    }
 }
 
 /// Parse multiple GCodes, storing them in a buffer.

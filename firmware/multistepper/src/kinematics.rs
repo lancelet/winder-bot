@@ -12,5 +12,6 @@ pub use limit_switch::LimitSwitch;
 pub use limit_switch::LimitSwitchState;
 pub use limited_stepper::LimitedStepper;
 pub use positioned_stepper::PositionedStepper;
+pub use stepper::CheckedStepper;
 pub use stepper::Stepper;
 pub use steps::Steps;

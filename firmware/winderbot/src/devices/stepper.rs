@@ -61,9 +61,9 @@ impl<P: PinOps, D: PinOps> Stepper<P, D> {
     fn do_step(&mut self, direction: Direction) {
         self.set_direction(direction);
         self.pin_pulse.set_high();
-        devices::Delay::delay_us(self.delay_pulse);
+        devices::delay::Delay::delay_us(self.delay_pulse);
         self.pin_pulse.set_low();
-        devices::Delay::delay_us(self.delay_pulse);
+        devices::delay::Delay::delay_us(self.delay_pulse);
     }
 
     /// Set the direction, but only if it needs changing.
@@ -86,13 +86,13 @@ impl<P: PinOps, D: PinOps> Stepper<P, D> {
     ///
     /// - `direction`: Desired direction of motion.
     fn force_set_direction(&mut self, direction: Direction) {
-        devices::Delay::delay_us(self.delay_direction);
+        devices::delay::Delay::delay_us(self.delay_direction);
         match direction {
             Direction::Negative => self.pin_direction.set_low(),
             Direction::Positive => self.pin_direction.set_high(),
         }
         self.direction = direction;
-        devices::Delay::delay_us(self.delay_direction);
+        devices::delay::Delay::delay_us(self.delay_direction);
     }
 }
 
