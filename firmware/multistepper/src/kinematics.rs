@@ -4,6 +4,7 @@ mod limit_switch;
 mod limited_stepper;
 mod linear_converter;
 mod positioned_stepper;
+mod rotary_converter;
 mod stepper;
 mod steps;
 
@@ -14,6 +15,7 @@ pub use limit_switch::LimitSwitchState;
 pub use limited_stepper::LimitedStepper;
 pub use linear_converter::LinearConverter;
 pub use positioned_stepper::PositionedStepper;
+pub use rotary_converter::RotaryConverter;
 pub use stepper::CheckedStepper;
 pub use stepper::Stepper;
 pub use steps::Steps;

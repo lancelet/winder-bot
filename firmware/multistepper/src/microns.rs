@@ -1,5 +1,7 @@
 use core::ops::{Add, Sub};
 
+use ufmt::{uDisplay, uWrite, Formatter};
+
 /// Underlying type representing the number of microns.
 type MicronsRepr = i32;
 
@@ -32,6 +34,50 @@ impl Sub for Microns {
     fn sub(self, rhs: Self) -> Self::Output {
         Microns::new(self.get_value() - rhs.get_value())
     }
+}
+
+impl uDisplay for Microns {
+    fn fmt<W>(&self, f: &mut Formatter<'_, W>) -> Result<(), W::Error>
+    where
+        W: uWrite + ?Sized,
+    {
+        udisplay_millis(self.get_value(), f)
+    }
+}
+
+pub fn udisplay_millis<W>(
+    value: i32,
+    f: &mut Formatter<W>,
+) -> Result<(), W::Error>
+where
+    W: uWrite + ?Sized,
+{
+    // Sign character.
+    if value >= 0 {
+        f.write_char('+')?;
+    } else {
+        f.write_char('-')?;
+    }
+
+    let v = value.abs();
+    let int_part = v / 1000;
+    let frc_part = v % 1000;
+
+    int_part.fmt(f)?;
+    f.write_char('.')?;
+
+    if frc_part == 0 {
+        f.write_str("000")?;
+    } else {
+        if frc_part < 10 {
+            f.write_str("00")?;
+        } else if frc_part < 100 {
+            f.write_char('0')?;
+        }
+        frc_part.fmt(f)?;
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]

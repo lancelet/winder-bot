@@ -1,7 +1,7 @@
 use crate::commands::command::Command;
 use multistepper::gcode::{parse_gcodes, GCode};
 use ufmt_macros::uDebug;
-use winnow::{error::ContextError, token::one_of, Parser};
+use winnow::{combinator::alt, error::ContextError, token::one_of, Parser};
 
 /// Command Parser.
 ///
@@ -26,9 +26,13 @@ impl<const N_GCODES: usize> CommandParser<N_GCODES> {
             Ok(false) => Err(Error::BufferOverflow),
             Ok(true) => {
                 let mut tok_input = self.buffer.as_slice();
-                parse_simple_g(28, Command::Home)
-                    .parse_next(&mut tok_input)
-                    .map_err(|_| Error::ParseError)
+                alt((
+                    parse_simple_g(28, Command::Home),
+                    parse_simple_g(90, Command::AbsolutePositioning),
+                    parse_simple_g(91, Command::RelativePositioning),
+                ))
+                .parse_next(&mut tok_input)
+                .map_err(|_| Error::ParseError)
             }
         }
     }

@@ -18,15 +18,21 @@ use arduino_hal::{
     prelude::_unwrap_infallible_UnwrapInfallible,
     Peripherals, Pins, Usart,
 };
-use multistepper::{LimitedStepper, MicroSeconds, PositionedStepper, Steps};
+use multistepper::{
+    LimitedStepper, LinearConverter, MicroSeconds, PositionedStepper,
+    RotaryConverter, Steps,
+};
 use ufmt::uwriteln;
 
 pub struct Machine {
     x_axis: LimitedStepper<Stepper<D8, D9>, LimitSwitch<D13>, LimitSwitch<D12>>,
     a_axis: PositionedStepper<Stepper<D10, D11>>,
+    x_params: LinearConverter,
+    a_params: RotaryConverter,
     serial: Usart<USART0, Pin<Input, PD0>, Pin<Output, PD1>>,
     uart_input_buffer: heapless::String<80>,
     command_parser: CommandParser<8>,
+    move_mode: MoveMode,
 }
 
 impl Machine {
@@ -68,27 +74,43 @@ impl Machine {
         );
         let a_axis = PositionedStepper::new(a_stepper);
 
+        // Axis parameters.
+        let x_params = LinearConverter::new(6400, 5000);
+        let a_params = RotaryConverter::new(6400);
+
         // UART
         let uart_input_buffer = heapless::String::new();
 
         // Command parser and GCode buffer.
         let command_parser = CommandParser::new();
 
+        // Move mode.
+        let move_mode = MoveMode::Absolute;
+
         Self {
             x_axis,
             a_axis,
+            x_params,
+            a_params,
             serial,
             uart_input_buffer,
             command_parser,
+            move_mode,
         }
     }
 
     pub fn next_command(&mut self) {
+        use MoveMode::*;
         let result = match self.block_for_next_command() {
             Command::Home => self.run_home(),
+            Command::AbsolutePositioning => self.set_move_mode(Absolute),
+            Command::RelativePositioning => self.set_move_mode(Relative),
         };
         match result {
-            Ok(()) => uwriteln!(&mut self.serial, "Ok.").unwrap_infallible(),
+            Ok(()) => {
+                self.print_position();
+                uwriteln!(&mut self.serial, "Ok.").unwrap_infallible()
+            }
             Err(err) => self.print_error(err),
         }
     }
@@ -126,6 +148,12 @@ impl Machine {
         }
     }
 
+    /// Sets the move mode.
+    fn set_move_mode(&mut self, move_mode: MoveMode) -> Result<(), Error> {
+        self.move_mode = move_mode;
+        Ok(())
+    }
+
     /// Run the homing routine.
     fn run_home(&mut self) -> Result<(), Error> {
         let move_delay = MicroSeconds::new(50);
@@ -137,6 +165,14 @@ impl Machine {
             None => Err(Error::HomingFailed),
             Some(_steps) => Ok(()),
         }
+    }
+
+    /// Print the machine position.
+    fn print_position(&mut self) {
+        let x = self.x_params.to_microns(self.x_axis.get_position());
+        let a = self.a_params.to_millidegrees(self.a_axis.get_position());
+
+        uwriteln!(&mut self.serial, "X{} A{}", x, a).unwrap_infallible();
     }
 
     /// Print one of the errors from this module.
@@ -153,4 +189,9 @@ impl Machine {
 
 enum Error {
     HomingFailed,
+}
+
+enum MoveMode {
+    Absolute,
+    Relative,
 }

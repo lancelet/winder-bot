@@ -1,5 +1,9 @@
 use core::ops::{Add, Sub};
 
+use ufmt::uDisplay;
+
+use crate::microns::udisplay_millis;
+
 /// Underlying type representing the number of microns.
 type MilliDegreesRepr = i32;
 
@@ -16,6 +20,33 @@ impl MilliDegrees {
     pub fn get_value(&self) -> MilliDegreesRepr {
         self.0
     }
+
+    /// Normalize a `MilliDegrees` value to the range `[0, 359999]`.
+    ///
+    /// This corresponds to the range 0 degrees (inclusive) to 360 degrees
+    /// (exlusive).
+    pub fn normalize(&self) -> MilliDegrees {
+        MilliDegrees::new(self.0 % 360000)
+    }
+
+    /// Returns the shortest angular rotation between this angle and other
+    /// angle.
+    ///
+    /// This is the shortest arc rotation between the angles. It is always in
+    /// the range `[180000, -179999]`.
+    pub fn shortest_angle_to(&self, other: MilliDegrees) -> MilliDegrees {
+        let self_n = self.normalize().get_value();
+        let other_n = other.normalize().get_value();
+
+        let mut delta: i32 = other_n - self_n;
+        if delta > 180000 {
+            delta -= 360000;
+        } else if delta <= -180000 {
+            delta += 360000;
+        }
+
+        MilliDegrees::new(delta)
+    }
 }
 
 impl Add for MilliDegrees {
@@ -31,6 +62,15 @@ impl Sub for MilliDegrees {
 
     fn sub(self, rhs: Self) -> Self::Output {
         MilliDegrees::new(self.get_value() - rhs.get_value())
+    }
+}
+
+impl uDisplay for MilliDegrees {
+    fn fmt<W>(&self, f: &mut ufmt::Formatter<'_, W>) -> Result<(), W::Error>
+    where
+        W: ufmt::uWrite + ?Sized,
+    {
+        udisplay_millis(self.get_value(), f)
     }
 }
 

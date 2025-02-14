@@ -113,7 +113,7 @@ impl<S: Stepper, LP: LimitSwitch, LN: LimitSwitch> LimitedStepper<S, LP, LN> {
     }
 
     /// Returns the current position of the stepper.
-    fn get_position(&self) -> Steps {
+    pub fn get_position(&self) -> Steps {
         self.stepper.get_position()
     }
 

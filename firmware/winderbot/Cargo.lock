@@ -144,6 +144,7 @@ name = "multistepper"
 version = "0.1.0"
 dependencies = [
  "heapless",
+ "ufmt",
  "winnow",
 ]
 

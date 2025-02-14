@@ -6,6 +6,8 @@ use crate::Steps;
 /// This converts:
 /// - Microns to steps.
 /// - Steps to microns.
+///
+/// It also performs delta calculations for movement.
 pub struct LinearConverter {
     steps_per_revolution: i32,
     microns_per_revolution: i32,
@@ -35,6 +37,22 @@ impl LinearConverter {
                 / self.microns_per_revolution as i64) as i32,
         )
     }
+
+    /// Computes the number of steps to move the axis to get from the current
+    /// position (in steps) to a target position (in microns).
+    ///
+    /// # Parameters
+    ///
+    /// - `current`: Current position, in steps.
+    /// - `target`: Target position, in microns.
+    ///
+    /// # Returns
+    ///
+    /// - The number of steps to move (signed).
+    pub fn steps_to(&self, current: Steps, target: Microns) -> Steps {
+        let delta = target - self.to_microns(current);
+        self.to_steps(delta)
+    }
 }
 
 #[cfg(test)]
@@ -51,7 +69,8 @@ mod test {
             let steps = lc.to_steps(microns);
             let result = lc.to_microns(steps);
 
-            // The values may be slightly different, but no greater than 1 unit.
+            // The values may be slightly different due to rounding, but no
+            // greater than 1 unit.
             let difference = (microns.get_value() - result.get_value()).abs();
             assert!(difference <= 1);
         }

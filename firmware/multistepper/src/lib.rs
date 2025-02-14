@@ -14,6 +14,7 @@ pub use kinematics::LimitSwitchState;
 pub use kinematics::LimitedStepper;
 pub use kinematics::LinearConverter;
 pub use kinematics::PositionedStepper;
+pub use kinematics::RotaryConverter;
 pub use kinematics::Stepper;
 pub use kinematics::Steps;
 
