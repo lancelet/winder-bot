@@ -30,15 +30,15 @@ impl GCode {
 /// Linear axis move amount.
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub struct Linear {
-    axis: LinAxis,
-    amount: Microns,
+    pub axis: LinAxis,
+    pub amount: Microns,
 }
 
 /// Rotary axis move amount.
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub struct Rotary {
-    axis: RotAxis,
-    amount: MilliDegrees,
+    pub axis: RotAxis,
+    pub amount: MilliDegrees,
 }
 
 /// G command.

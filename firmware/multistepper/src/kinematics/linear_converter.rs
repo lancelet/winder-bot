@@ -23,19 +23,21 @@ impl LinearConverter {
     }
 
     /// Converts a value in [Steps] to a value in [Microns].
-    pub fn to_microns(&self, steps: Steps) -> Microns {
-        Microns::new(
-            (steps.get_value() as i64 * self.microns_per_revolution as i64
-                / self.steps_per_revolution as i64) as i32,
-        )
+    pub fn to_microns(&self, steps: Steps) -> Option<Microns> {
+        (steps.get_value() as i64)
+            .checked_mul(self.microns_per_revolution as i64)
+            .and_then(|q| q.checked_div(self.steps_per_revolution as i64))
+            .and_then(|q| q.try_into().ok())
+            .map(Microns::new)
     }
 
     /// Converts a value in [Microns] to a value in [Steps].
-    pub fn to_steps(&self, microns: Microns) -> Steps {
-        Steps::new(
-            (microns.get_value() as i64 * self.steps_per_revolution as i64
-                / self.microns_per_revolution as i64) as i32,
-        )
+    pub fn to_steps(&self, microns: Microns) -> Option<Steps> {
+        (microns.get_value() as i64)
+            .checked_mul(self.steps_per_revolution as i64)
+            .and_then(|q| q.checked_div(self.microns_per_revolution as i64))
+            .and_then(|q| q.try_into().ok())
+            .map(Steps::new)
     }
 
     /// Computes the number of steps to move the axis to get from the current
@@ -49,9 +51,11 @@ impl LinearConverter {
     /// # Returns
     ///
     /// - The number of steps to move (signed).
-    pub fn steps_to(&self, current: Steps, target: Microns) -> Steps {
-        let delta = target - self.to_microns(current);
-        self.to_steps(delta)
+    pub fn steps_to(&self, current: Steps, target: Microns) -> Option<Steps> {
+        target
+            .get_value()
+            .checked_sub(self.to_microns(current)?.get_value())
+            .and_then(|q| self.to_steps(Microns::new(q)))
     }
 }
 
@@ -66,8 +70,8 @@ mod test {
             let lc = LinearConverter::new(6400, 5000);
 
             let microns = Microns::new(microns_value);
-            let steps = lc.to_steps(microns);
-            let result = lc.to_microns(steps);
+            let steps = lc.to_steps(microns).unwrap();
+            let result = lc.to_microns(steps).unwrap();
 
             // The values may be slightly different due to rounding, but no
             // greater than 1 unit.

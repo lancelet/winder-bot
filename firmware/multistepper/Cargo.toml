@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 heapless = "0.8.0"
 ufmt = "0.2.0"
+ufmt-macros = "0.3.0"
 winnow = { version = "0.7.2", default-features = false }
 
 [dev-dependencies]

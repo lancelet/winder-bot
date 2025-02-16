@@ -1,6 +1,7 @@
 use core::ops::{Add, Sub};
 
 use ufmt::uDisplay;
+use ufmt_macros::uDebug;
 
 use crate::microns::udisplay_millis;
 
@@ -8,10 +9,10 @@ use crate::microns::udisplay_millis;
 type MilliDegreesRepr = i32;
 
 /// Angle in millidegrees.
-#[derive(Debug, PartialEq, PartialOrd, Eq, Ord, Copy, Clone)]
+#[derive(Debug, uDebug, PartialEq, PartialOrd, Eq, Ord, Copy, Clone)]
 pub struct MilliDegrees(MilliDegreesRepr);
 impl MilliDegrees {
-    /// Creates a new `Microns`.
+    /// Creates a new `MilliDegrees`.
     pub fn new(value: MilliDegreesRepr) -> Self {
         Self(value)
     }

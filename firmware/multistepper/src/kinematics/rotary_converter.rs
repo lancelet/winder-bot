@@ -20,19 +20,21 @@ impl RotaryConverter {
     }
 
     /// Converts a value in [Steps] to a value in [MilliDegrees].
-    pub fn to_millidegrees(&self, steps: Steps) -> MilliDegrees {
-        MilliDegrees::new(
-            (steps.get_value() as i64 * 360000
-                / self.steps_per_revolution as i64) as i32,
-        )
+    pub fn to_millidegrees(&self, steps: Steps) -> Option<MilliDegrees> {
+        (steps.get_value() as i64)
+            .checked_mul(360000)
+            .and_then(|q| q.checked_div(self.steps_per_revolution as i64))
+            .and_then(|q| q.try_into().ok())
+            .map(MilliDegrees::new)
     }
 
     /// Converts a value in [MilliDegrees] to a value in [Steps].
-    pub fn to_steps(&self, millidegrees: MilliDegrees) -> Steps {
-        Steps::new(
-            (millidegrees.get_value() as i64 * self.steps_per_revolution as i64
-                / 360000) as i32,
-        )
+    pub fn to_steps(&self, millidegrees: MilliDegrees) -> Option<Steps> {
+        (millidegrees.get_value() as i64)
+            .checked_mul(self.steps_per_revolution as i64)
+            .and_then(|q| q.checked_div(360000))
+            .and_then(|q| q.try_into().ok())
+            .map(Steps::new)
     }
 
     /// Computes the minimum number of steps to move the axis from the current
@@ -51,10 +53,14 @@ impl RotaryConverter {
     /// # Returns
     ///
     /// - The number of steps to move (signed).
-    pub fn steps_to_abs(&self, current: Steps, target: MilliDegrees) -> Steps {
-        let mdg = self.to_millidegrees(current);
-        let delta = mdg.shortest_angle_to(target);
-        self.to_steps(delta)
+    pub fn steps_to_abs(
+        &self,
+        current: Steps,
+        target: MilliDegrees,
+    ) -> Option<Steps> {
+        self.to_millidegrees(current)
+            .map(|mdg| mdg.shortest_angle_to(target))
+            .and_then(|q| self.to_steps(q))
     }
 
     /// Computes the minimum number of steps to move the axis from the current
@@ -71,9 +77,14 @@ impl RotaryConverter {
     /// # Returns
     ///
     /// - The number of steps to move (signed).
-    pub fn steps_to_rel(&self, current: Steps, offset: MilliDegrees) -> Steps {
-        let offset_steps = self.to_steps(offset);
-        Steps::new(current.get_value() + offset_steps.get_value())
+    pub fn steps_to_rel(
+        &self,
+        current: Steps,
+        offset: MilliDegrees,
+    ) -> Option<Steps> {
+        self.to_steps(offset)
+            .and_then(|q| current.get_value().checked_add(q.get_value()))
+            .map(Steps::new)
     }
 }
 
@@ -88,14 +99,8 @@ mod test {
             let rc = RotaryConverter::new(6400);
 
             let mdg = MilliDegrees::new(mdg_value);
-            let steps = rc.to_steps(mdg);
-            let result = rc.to_millidegrees(steps);
-
-            // The values may be slightly different due to rounding, but no
-            // greater than 1 unit.
-            println!("mdg    = {}", mdg);
-            println!("steps  = {}", steps.get_value());
-            println!("result = {}", result);
+            let steps = rc.to_steps(mdg).unwrap();
+            let result = rc.to_millidegrees(steps).unwrap();
 
             // The values may be slightly different due to rounding and step
             // precision.

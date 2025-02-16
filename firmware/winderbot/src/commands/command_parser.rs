@@ -1,5 +1,8 @@
-use crate::commands::command::Command;
-use multistepper::gcode::{parse_gcodes, GCode};
+use crate::commands::command::{Command, Move};
+use multistepper::{
+    gcode::{parse_gcodes, GCode, LinAxis, Linear, RotAxis, Rotary},
+    Microns, MilliDegrees,
+};
 use ufmt_macros::uDebug;
 use winnow::{combinator::alt, error::ContextError, token::one_of, Parser};
 
@@ -27,6 +30,7 @@ impl<const N_GCODES: usize> CommandParser<N_GCODES> {
             Ok(true) => {
                 let mut tok_input = self.buffer.as_slice();
                 alt((
+                    parse_move_g,
                     parse_simple_g(28, Command::Home),
                     parse_simple_g(90, Command::AbsolutePositioning),
                     parse_simple_g(91, Command::RelativePositioning),
@@ -59,4 +63,52 @@ fn parse_simple_g<'s>(
     command: Command,
 ) -> impl Fn(&mut &'s [GCode]) -> Result<Command, ContextError> {
     move |input| one_of(GCode::g(value)).parse_next(input).map(|_| command)
+}
+
+/// Parse a move command `G0 ...`.
+fn parse_move_g<'s>(input: &mut &'s [GCode]) -> Result<Command, ContextError> {
+    one_of(GCode::g(0)).parse_next(input)?;
+
+    let mut mve = Move {
+        x_amount: Microns::new(0),
+        a_amount: MilliDegrees::new(0),
+    };
+    while !input.is_empty() {
+        match parse_axis_amount(input) {
+            Err(err) => return Err(err),
+            Ok(AxisAmount::Linear(Linear {
+                axis: LinAxis::X,
+                amount: microns,
+            })) => mve.x_amount = microns,
+            Ok(AxisAmount::Rotary(Rotary {
+                axis: RotAxis::A,
+                amount: mdg,
+            })) => mve.a_amount = mdg,
+            _ => return Err(ContextError::new()),
+        }
+    }
+
+    Ok(Command::Move(mve))
+}
+
+/// An amount to move along an axis.
+enum AxisAmount {
+    Linear(Linear),
+    Rotary(Rotary),
+}
+
+/// Parse an axis amount command.
+fn parse_axis_amount<'s>(
+    input: &mut &'s [GCode],
+) -> Result<AxisAmount, ContextError> {
+    if let Some((first, rest)) = input.split_first() {
+        *input = rest;
+        match first {
+            GCode::Linear(linear) => Ok(AxisAmount::Linear(*linear)),
+            GCode::Rotary(rotary) => Ok(AxisAmount::Rotary(*rotary)),
+            _ => Err(ContextError::new()),
+        }
+    } else {
+        Err(ContextError::new())
+    }
 }

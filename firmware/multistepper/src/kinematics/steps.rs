@@ -25,12 +25,12 @@ impl Steps {
 
     /// Increment the value if it's safe to do so without an overflow.
     pub fn inc(&self) -> Option<Self> {
-        self.0.checked_add_unsigned(1).map(Steps)
+        self.0.checked_add(1).map(Steps)
     }
 
     /// Decrement the value if it's safe to do so without an overflow.
     pub fn dec(&self) -> Option<Self> {
-        self.0.checked_sub_unsigned(1).map(Steps)
+        self.0.checked_sub(1).map(Steps)
     }
 }
 

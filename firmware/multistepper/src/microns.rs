@@ -1,12 +1,13 @@
 use core::ops::{Add, Sub};
 
 use ufmt::{uDisplay, uWrite, Formatter};
+use ufmt_macros::uDebug;
 
 /// Underlying type representing the number of microns.
 type MicronsRepr = i32;
 
 /// Distance in microns.
-#[derive(Debug, PartialEq, PartialOrd, Eq, Ord, Copy, Clone)]
+#[derive(Debug, uDebug, PartialEq, PartialOrd, Eq, Ord, Copy, Clone)]
 pub struct Microns(MicronsRepr);
 impl Microns {
     /// Creates a new `Microns`.
